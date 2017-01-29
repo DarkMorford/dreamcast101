@@ -17,23 +17,26 @@ KOS_INIT_ROMDISK(romdisk);
 bool exitProgram = false;
 pvr_poly_hdr_t nontexturedHeader;
 
-float rotationX = 0;
-float rotationY = 0;
+float rotationX = 0.0f;
+float rotationY = 0.0f;
 
 pvr_ptr_t texMemory[6];
 pvr_poly_hdr_t texHeaders[6];
 
-float ambientLight = 0.3f;
-float diffuseLight = 0.7f;
-vector_t lightPosition = { 0, 0, 10, 1 };
+// Lighting parameters
+float    ambientLight  = 0.3f;
+float    diffuseLight  = 0.7f;
+vector_t lightPosition = { 0.0f, 0.0f, 10.0f, 1.0f };
 
+// Vertices for a square
 vector_t verts[4] = {
-	{ -1, 1, 0, 1 },
-	{ -1, -1, 0, 1 },
-	{ 1, 1, 0, 1 },
-	{ 1, -1, 0, 1}
+	{ -1.0f,  1.0f, 0.0f, 1.0f },
+	{ -1.0f, -1.0f, 0.0f, 1.0f },
+	{  1.0f,  1.0f, 0.0f, 1.0f },
+	{  1.0f, -1.0f, 0.0f, 1.0f }
 };
 
+// Vertices for a cube
 vector_t verts_in[8] = {
 	{  1.0f,  1.0f,  1.0f, 1.0f },
 	{ -1.0f,  1.0f,  1.0f, 1.0f },
@@ -45,6 +48,7 @@ vector_t verts_in[8] = {
 	{ -1.0f, -1.0f, -1.0f, 1.0f }
 };
 
+// Normals for a cube
 vector_t normals[6] = {
 	{  0.0f,  0.0f,  1.0f, 0.0f },
 	{  0.0f,  0.0f, -1.0f, 0.0f },
@@ -54,18 +58,23 @@ vector_t normals[6] = {
 	{  0.0f, -1.0f,  0.0f, 0.0f }
 };
 
+// Load a texture from the filesystem into video RAM
 pvr_ptr_t loadTexture(const char *texName)
 {
+	const size_t HEADER_SIZE  = 32;
+	const size_t TEXTURE_SIZE = 174768;
+	
 	FILE *texFile = fopen(texName, "rb");
-	pvr_ptr_t textureMemory = pvr_mem_malloc(174768);
-	char header[32];
-	fread(header, 1, 32, texFile);
-	fread(textureMemory, 1, 174768, texFile);
+	pvr_ptr_t textureMemory = pvr_mem_malloc(TEXTURE_SIZE);
+	char header[HEADER_SIZE];
+	fread(header, 1, HEADER_SIZE, texFile);
+	fread(textureMemory, 1, TEXTURE_SIZE, texFile);
 	fclose(texFile);
 
 	return textureMemory;
 }
 
+// Create a tristrip header using a loaded texture
 pvr_poly_hdr_t createTexHeader(pvr_ptr_t texture)
 {
 	pvr_poly_cxt_t context;
@@ -79,6 +88,7 @@ pvr_poly_hdr_t createTexHeader(pvr_ptr_t texture)
 	return header;
 }
 
+// Calculate light intensity using the Phong reflection model
 float calculateDiffuseIntensity(vector_t light, vector_t point, vector_t normal)
 {
 	vec3f_normalize(normal.x, normal.y, normal.z);
@@ -103,6 +113,7 @@ float calculateDiffuseIntensity(vector_t light, vector_t point, vector_t normal)
 		return 0;
 }
 
+// Send a lit vertex to the graphics hardware
 void submitVertex(vector_t light, vector_t lightVertex, vector_t vertex, vector_t normal, float u, float v, bool endOfStrip = false)
 {
 	int flags = endOfStrip ? PVR_CMD_VERTEX_EOL : PVR_CMD_VERTEX;
@@ -119,13 +130,13 @@ void Initialize()
 	maple_device_t *vmu = maple_enum_type(0, MAPLE_FUNC_LCD);
 	vmu_draw_lcd(vmu, lrrsoft_logo);
 
-	// Initialize the graphics libraries
+	// Initialize the graphics and sound libraries
 	pvr_init_defaults();
 	plx_mat3d_init();
 	snd_stream_init();
 	mp3_init();
 
-	// Compile a polygon header
+	// Compile a polygon header with no texturing
 	pvr_poly_cxt_t nontexturedContext;
 	pvr_poly_cxt_col(&nontexturedContext, PVR_LIST_OP_POLY);
 	nontexturedContext.gen.culling = PVR_CULLING_CW;
@@ -158,7 +169,7 @@ void Initialize()
 	vector_t cameraUp      = { 0.0f, 1.0f, 0.0f, 0.0f };
 	plx_mat3d_lookat(&cameraPosition, &cameraTarget, &cameraUp);
 	
-	// Play music
+	// Play music with looping
 	mp3_start("/rd/tucson.mp3", 1);
 }
 
@@ -174,11 +185,12 @@ void Update()
 	vector_t light = lightPosition;
 	mat_trans_single4(light.x, light.y, light.z, light.w);
 	
-	plx_mat3d_rotate(rotationX, 1, 0, 0);
-	plx_mat3d_rotate(rotationY, 0, 1, 0);
+	// Rotate the cube
+	plx_mat3d_rotate(rotationX, 1.0f, 0.0f, 0.0f);
+	plx_mat3d_rotate(rotationY, 0.0f, 1.0f, 0.0f);
 	
-	rotationX += 1.0;
-	rotationY += 0.5;
+	rotationX += 1.0f;
+	rotationY += 0.5f;
 
 	// Transform normals
 	vector_t transformedNormals[6];
@@ -210,40 +222,40 @@ void Update()
 	pvr_list_begin(PVR_LIST_OP_POLY);
 
 	pvr_prim(&texHeaders[0], sizeof(pvr_poly_hdr_t));
-	submitVertex(light, lightVertices[0], transformedVerts[0], transformedNormals[0], 1, 0);
-	submitVertex(light, lightVertices[1], transformedVerts[1], transformedNormals[0], 0, 0);
-	submitVertex(light, lightVertices[2], transformedVerts[2], transformedNormals[0], 1, 1);
-	submitVertex(light, lightVertices[3], transformedVerts[3], transformedNormals[0], 0, 1, true);
+	submitVertex(light, lightVertices[0], transformedVerts[0], transformedNormals[0], 1.0f, 0.0f);
+	submitVertex(light, lightVertices[1], transformedVerts[1], transformedNormals[0], 0.0f, 0.0f);
+	submitVertex(light, lightVertices[2], transformedVerts[2], transformedNormals[0], 1.0f, 1.0f);
+	submitVertex(light, lightVertices[3], transformedVerts[3], transformedNormals[0], 0.0f, 1.0f, true);
 
 	pvr_prim(&texHeaders[1], sizeof(pvr_poly_hdr_t));
-	submitVertex(light, lightVertices[5], transformedVerts[5], transformedNormals[1], 1, 0);
-	submitVertex(light, lightVertices[4], transformedVerts[4], transformedNormals[1], 0, 0);
-	submitVertex(light, lightVertices[7], transformedVerts[7], transformedNormals[1], 1, 1);
-	submitVertex(light, lightVertices[6], transformedVerts[6], transformedNormals[1], 0, 1, true);
+	submitVertex(light, lightVertices[5], transformedVerts[5], transformedNormals[1], 1.0f, 0.0f);
+	submitVertex(light, lightVertices[4], transformedVerts[4], transformedNormals[1], 0.0f, 0.0f);
+	submitVertex(light, lightVertices[7], transformedVerts[7], transformedNormals[1], 1.0f, 1.0f);
+	submitVertex(light, lightVertices[6], transformedVerts[6], transformedNormals[1], 0.0f, 1.0f, true);
 
 	pvr_prim(&texHeaders[2], sizeof(pvr_poly_hdr_t));
-	submitVertex(light, lightVertices[4], transformedVerts[4], transformedNormals[2], 1, 0);
-	submitVertex(light, lightVertices[0], transformedVerts[0], transformedNormals[2], 0, 0);
-	submitVertex(light, lightVertices[6], transformedVerts[6], transformedNormals[2], 1, 1);
-	submitVertex(light, lightVertices[2], transformedVerts[2], transformedNormals[2], 0, 1, true);
+	submitVertex(light, lightVertices[4], transformedVerts[4], transformedNormals[2], 1.0f, 0.0f);
+	submitVertex(light, lightVertices[0], transformedVerts[0], transformedNormals[2], 0.0f, 0.0f);
+	submitVertex(light, lightVertices[6], transformedVerts[6], transformedNormals[2], 1.0f, 1.0f);
+	submitVertex(light, lightVertices[2], transformedVerts[2], transformedNormals[2], 0.0f, 1.0f, true);
 
 	pvr_prim(&texHeaders[3], sizeof(pvr_poly_hdr_t));
-	submitVertex(light, lightVertices[1], transformedVerts[1], transformedNormals[3], 1, 0);
-	submitVertex(light, lightVertices[5], transformedVerts[5], transformedNormals[3], 0, 0);
-	submitVertex(light, lightVertices[3], transformedVerts[3], transformedNormals[3], 1, 1);
-	submitVertex(light, lightVertices[7], transformedVerts[7], transformedNormals[3], 0, 1, true);
+	submitVertex(light, lightVertices[1], transformedVerts[1], transformedNormals[3], 1.0f, 0.0f);
+	submitVertex(light, lightVertices[5], transformedVerts[5], transformedNormals[3], 0.0f, 0.0f);
+	submitVertex(light, lightVertices[3], transformedVerts[3], transformedNormals[3], 1.0f, 1.0f);
+	submitVertex(light, lightVertices[7], transformedVerts[7], transformedNormals[3], 0.0f, 1.0f, true);
 
 	pvr_prim(&texHeaders[4], sizeof(pvr_poly_hdr_t));
-	submitVertex(light, lightVertices[4], transformedVerts[4], transformedNormals[4], 1, 0);
-	submitVertex(light, lightVertices[5], transformedVerts[5], transformedNormals[4], 0, 0);
-	submitVertex(light, lightVertices[0], transformedVerts[0], transformedNormals[4], 1, 1);
-	submitVertex(light, lightVertices[1], transformedVerts[1], transformedNormals[4], 0, 1, true);
+	submitVertex(light, lightVertices[4], transformedVerts[4], transformedNormals[4], 1.0f, 0.0f);
+	submitVertex(light, lightVertices[5], transformedVerts[5], transformedNormals[4], 0.0f, 0.0f);
+	submitVertex(light, lightVertices[0], transformedVerts[0], transformedNormals[4], 1.0f, 1.0f);
+	submitVertex(light, lightVertices[1], transformedVerts[1], transformedNormals[4], 0.0f, 1.0f, true);
 
 	pvr_prim(&texHeaders[5], sizeof(pvr_poly_hdr_t));
-	submitVertex(light, lightVertices[7], transformedVerts[7], transformedNormals[5], 1, 0);
-	submitVertex(light, lightVertices[6], transformedVerts[6], transformedNormals[5], 0, 0);
-	submitVertex(light, lightVertices[3], transformedVerts[3], transformedNormals[5], 1, 1);
-	submitVertex(light, lightVertices[2], transformedVerts[2], transformedNormals[5], 0, 1, true);
+	submitVertex(light, lightVertices[7], transformedVerts[7], transformedNormals[5], 1.0f, 0.0f);
+	submitVertex(light, lightVertices[6], transformedVerts[6], transformedNormals[5], 0.0f, 0.0f);
+	submitVertex(light, lightVertices[3], transformedVerts[3], transformedNormals[5], 1.0f, 1.0f);
+	submitVertex(light, lightVertices[2], transformedVerts[2], transformedNormals[5], 0.0f, 1.0f, true);
 
 	pvr_list_finish();
 	pvr_scene_finish();
@@ -255,6 +267,7 @@ void Cleanup()
 	maple_device_t *vmu = maple_enum_type(0, MAPLE_FUNC_LCD);
 	vmu_draw_lcd(vmu, vmu_clear);
 	
+	// Clean up the texture memory we allocated earlier
 	pvr_mem_free(texMemory[5]);
 	pvr_mem_free(texMemory[4]);
 	pvr_mem_free(texMemory[3]);
@@ -262,7 +275,10 @@ void Cleanup()
 	pvr_mem_free(texMemory[1]);
 	pvr_mem_free(texMemory[0]);
 
+	// Stop playing music
 	mp3_stop();
+	
+	// Shut down libraries we used
 	mp3_shutdown();
 	snd_stream_shutdown();
 	pvr_shutdown();
